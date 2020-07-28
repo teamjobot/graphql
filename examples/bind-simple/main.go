@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/graphql-go/graphql"
+	"github.com/teamjobot/graphql"
 )
 
 type GreetingInput struct {

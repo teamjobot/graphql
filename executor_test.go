@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/graphql-go/graphql"
-	"github.com/graphql-go/graphql/gqlerrors"
-	"github.com/graphql-go/graphql/language/location"
-	"github.com/graphql-go/graphql/testutil"
+	"github.com/teamjobot/graphql"
+	"github.com/teamjobot/graphql/gqlerrors"
+	"github.com/teamjobot/graphql/language/location"
+	"github.com/teamjobot/graphql/testutil"
 )
 
 func TestExecutesArbitraryCode(t *testing.T) {

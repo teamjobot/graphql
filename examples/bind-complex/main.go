@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/graphql-go/graphql"
+	"github.com/teamjobot/graphql"
 )
 
 var people = []Person{
