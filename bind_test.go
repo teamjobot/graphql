@@ -2,6 +2,7 @@ package graphql_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -23,7 +24,18 @@ func Hello(ctx *context.Context) (output *HelloOutput, err error) {
 	return output, nil
 }
 
-func Upper(source *HelloOutput) string {
+func Hellos() []HelloOutput {
+	return []HelloOutput{
+		{
+			Message: "Hello One",
+		},
+		{
+			Message: "Hello Two",
+		},
+	}
+}
+
+func Upper(ctx *context.Context, source HelloOutput) string {
 	return strings.ToUpper(source.Message)
 }
 
@@ -107,7 +119,8 @@ func friends(ctx *context.Context) (output *FriendRecur) {
 func TestBindHappyPath(t *testing.T) {
 	// Schema
 	fields := graphql.Fields{
-		"hello": graphql.Bind(Hello, graphql.Fields{
+		"hello": graphql.Bind(Hello),
+		"hellos": graphql.Bind(Hellos, graphql.Fields{
 			"upper": graphql.Bind(Upper),
 		}),
 		"greeting":    graphql.Bind(Greeting),
@@ -136,6 +149,10 @@ func TestBindHappyPath(t *testing.T) {
 	query := `
 		{
 			hello {
+				message
+				upper
+			}
+			hellos {
 				message
 				upper
 			}
@@ -176,6 +193,8 @@ func TestBindHappyPath(t *testing.T) {
 	if len(r.Errors) > 0 {
 		t.Errorf("failed to execute graphql operation, errors: %+v", r.Errors)
 	}
+	json, err := json.MarshalIndent(r.Data, "", "  ")
+	fmt.Println(string(json))
 }
 
 func TestBindPanicImproperInput(t *testing.T) {

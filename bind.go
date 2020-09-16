@@ -3,7 +3,6 @@ package graphql
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 )
@@ -105,7 +104,7 @@ func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
 					if p.Context == nil {
 						inputs[*ctxIn] = reflect.New(ctxType)
 					} else {
-						inputs[*ctxIn] = reflect.ValueOf(&p.Context).Convert(ctxType)
+						inputs[*ctxIn] = reflect.ValueOf(&p.Context)
 					}
 				} else {
 					if p.Context == nil {
@@ -175,7 +174,8 @@ func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
 
 		var outputType Output
 		if outputOut != nil {
-			outputType = BindType(tipe.Out(*outputOut), combinedAdditionalFields)
+			outputType = BindType(tipe.Out(*outputOut))
+			extendType(outputType, combinedAdditionalFields)
 		}
 
 		field := &Field{
@@ -186,7 +186,8 @@ func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
 
 		return field
 	} else if tipe.Kind() == reflect.Struct {
-		fieldType := BindType(reflect.TypeOf(bindTo), combinedAdditionalFields)
+		fieldType := BindType(reflect.TypeOf(bindTo))
+		extendType(fieldType, combinedAdditionalFields)
 		field := &Field{
 			Type: fieldType,
 			Resolve: func(p ResolveParams) (data interface{}, err error) {
@@ -206,6 +207,22 @@ func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
 		}
 	}
 }
+
+func extendType(t Type, fields Fields) {
+	switch t.(type) {
+	case *Object:
+		object := t.(*Object)
+		for fieldName, fieldConfig := range fields {
+			object.AddFieldConfig(fieldName, fieldConfig)
+		}
+		return
+	case *List:
+		list := t.(*List)
+		extendType(list.OfType, fields)
+		return
+	}
+}
+
 func convertValue(value reflect.Value, targetType reflect.Type) (ret reflect.Value, err error) {
 	if !value.IsValid() {
 		return reflect.Zero(targetType), nil
@@ -218,7 +235,8 @@ func convertValue(value reflect.Value, targetType reflect.Type) (ret reflect.Val
 		}
 	} else {
 		if targetType.Kind() == reflect.Ptr {
-			return ret, errors.New("Unsupported: Convert value to pointer")
+			// Will throw an informative error
+			return value.Convert(targetType), nil
 		} else {
 			return value, nil
 		}

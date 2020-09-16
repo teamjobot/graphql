@@ -27,8 +27,7 @@ func MergeFields(fieldses ...Fields) (ret Fields) {
 	return ret
 }
 
-func BindType(tipe reflect.Type, additionalFields ...Fields) Type {
-	combinedAdditionalFields := MergeFields(additionalFields...)
+func BindType(tipe reflect.Type) Type {
 	if tipe.Kind() == reflect.Ptr {
 		tipe = tipe.Elem()
 	}
@@ -55,9 +54,10 @@ func BindType(tipe reflect.Type, additionalFields ...Fields) Type {
 		boundTypes[typeName] = object
 		*object = *NewObject(ObjectConfig{
 			Name:   typeName,
-			Fields: MergeFields(BindFields(reflect.New(tipe).Interface()), combinedAdditionalFields),
+			Fields: BindFields(reflect.New(tipe).Interface()),
 		})
 	}
+
 	return object
 }
 
