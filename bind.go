@@ -100,12 +100,12 @@ func Bind(bindTo interface{}) *Field {
 			if ctxIn != nil {
 				isPtr := tipe.In(*ctxIn).Kind() == reflect.Ptr
 				if isPtr {
-					inputs[*ctxIn] = reflect.ValueOf(&p.Context)
+					inputs[*ctxIn] = reflect.ValueOf(&p.Context).Convert(ctxType)
 				} else {
 					if p.Context == nil {
 						inputs[*ctxIn] = reflect.New(ctxType).Elem()
 					} else {
-						inputs[*ctxIn] = reflect.ValueOf(p.Context).Elem()
+						inputs[*ctxIn] = reflect.ValueOf(p.Context).Convert(ctxType).Elem()
 					}
 				}
 			}
@@ -146,7 +146,10 @@ func Bind(bindTo interface{}) *Field {
 				}
 			}
 			if outputOut != nil {
-				output = results[*outputOut].Interface()
+				val := results[*outputOut]
+				if !val.IsZero() {
+					output = val.Interface()
+				}
 			}
 			return output, err
 		}

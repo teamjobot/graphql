@@ -159,14 +159,20 @@ func extractValue(originTag string, obj interface{}) interface{} {
 	for j := 0; j < val.NumField(); j++ {
 		field := val.Type().Field(j)
 		if field.Type.Kind() == reflect.Struct {
-			res := extractValue(originTag, val.Field(j).Interface())
-			if res != nil {
-				return res
+			fieldVal := val.Field(j)
+			if !fieldVal.IsZero() {
+				res := extractValue(originTag, fieldVal.Interface())
+				if res != nil {
+					return res
+				}
 			}
 		}
 
 		if originTag == extractTag(field.Tag) {
-			return reflect.Indirect(val.Field(j)).Interface()
+			fieldVal := val.Field(j)
+			if !fieldVal.IsZero() {
+				return reflect.Indirect(fieldVal).Interface()
+			}
 		}
 	}
 	return nil
