@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -23,7 +24,8 @@ var errType = reflect.TypeOf((*error)(nil)).Elem()
 
 	Input or output types provided will be automatically bound using BindType.
 */
-func Bind(bindTo interface{}) *Field {
+func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
+	combinedAdditionalFields := MergeFields(additionalFields...)
 	val := reflect.ValueOf(bindTo)
 	tipe := reflect.TypeOf(bindTo)
 	if tipe.Kind() == reflect.Func {
@@ -100,7 +102,11 @@ func Bind(bindTo interface{}) *Field {
 			if ctxIn != nil {
 				isPtr := tipe.In(*ctxIn).Kind() == reflect.Ptr
 				if isPtr {
-					inputs[*ctxIn] = reflect.ValueOf(&p.Context).Convert(ctxType)
+					if p.Context == nil {
+						inputs[*ctxIn] = reflect.New(ctxType)
+					} else {
+						inputs[*ctxIn] = reflect.ValueOf(&p.Context).Convert(ctxType)
+					}
 				} else {
 					if p.Context == nil {
 						inputs[*ctxIn] = reflect.New(ctxType).Elem()
@@ -110,43 +116,56 @@ func Bind(bindTo interface{}) *Field {
 				}
 			}
 			if inputIn != nil {
-				var inputType, baseType reflect.Type
+				var inputType, inputBaseType, sourceType, sourceBaseType reflect.Type
+				sourceVal := reflect.ValueOf(p.Source)
+				sourceType = sourceVal.Type()
+				if sourceType.Kind() == reflect.Ptr {
+					sourceBaseType = sourceType.Elem()
+				} else {
+					sourceBaseType = sourceType
+				}
 				inputType = tipe.In(*inputIn)
 				isPtr := tipe.In(*inputIn).Kind() == reflect.Ptr
 				if isPtr {
-					baseType = inputType.Elem()
+					inputBaseType = inputType.Elem()
 				} else {
-					baseType = inputType
+					inputBaseType = inputType
 				}
-				input := reflect.New(baseType).Interface()
-				j, err := json.Marshal(p.Args)
-				if err == nil {
-					err = json.Unmarshal(j, &input)
+				var input interface{}
+				if sourceBaseType.AssignableTo(inputBaseType) {
+					input = sourceVal.Interface()
+				} else {
+					input = reflect.New(inputBaseType).Interface()
+					j, err := json.Marshal(p.Args)
+					if err == nil {
+						err = json.Unmarshal(j, &input)
+					}
+					if err != nil {
+						return nil, err
+					}
 				}
+
+				inputs[*inputIn], err = convertValue(reflect.ValueOf(input), inputType)
 				if err != nil {
 					return nil, err
 				}
-
-				if isPtr {
-					inputs[*inputIn] = reflect.ValueOf(input)
-				} else {
-					if input == nil {
-						inputs[*inputIn] = reflect.New(baseType).Elem()
-					} else {
-						inputs[*inputIn] = reflect.ValueOf(input).Elem()
-					}
-				}
 			}
-
 			results := val.Call(inputs)
 			if errOut != nil {
 				val := results[*errOut].Interface()
 				if val != nil {
 					err = val.(error)
 				}
+				if err != nil {
+					return output, err
+				}
 			}
 			if outputOut != nil {
-				val := results[*outputOut]
+				var val reflect.Value
+				val, err = convertValue(results[*outputOut], tipe.Out(*outputOut))
+				if err != nil {
+					return nil, err
+				}
 				if !val.IsZero() {
 					output = val.Interface()
 				}
@@ -156,7 +175,7 @@ func Bind(bindTo interface{}) *Field {
 
 		var outputType Output
 		if outputOut != nil {
-			outputType = BindType(tipe.Out(*outputOut))
+			outputType = BindType(tipe.Out(*outputOut), combinedAdditionalFields)
 		}
 
 		field := &Field{
@@ -167,7 +186,7 @@ func Bind(bindTo interface{}) *Field {
 
 		return field
 	} else if tipe.Kind() == reflect.Struct {
-		fieldType := BindType(reflect.TypeOf(bindTo))
+		fieldType := BindType(reflect.TypeOf(bindTo), combinedAdditionalFields)
 		field := &Field{
 			Type: fieldType,
 			Resolve: func(p ResolveParams) (data interface{}, err error) {
@@ -176,11 +195,32 @@ func Bind(bindTo interface{}) *Field {
 		}
 		return field
 	} else {
+		if len(additionalFields) > 0 {
+			panic("Cannot add field resolvers to a scalar type.")
+		}
 		return &Field{
 			Type: getGraphType(tipe),
 			Resolve: func(p ResolveParams) (data interface{}, err error) {
 				return bindTo, nil
 			},
+		}
+	}
+}
+func convertValue(value reflect.Value, targetType reflect.Type) (ret reflect.Value, err error) {
+	if !value.IsValid() {
+		return reflect.Zero(targetType), nil
+	}
+	if value.Type().Kind() == reflect.Ptr {
+		if targetType.Kind() == reflect.Ptr {
+			return value, nil
+		} else {
+			return value.Elem(), nil
+		}
+	} else {
+		if targetType.Kind() == reflect.Ptr {
+			return ret, errors.New("Unsupported: Convert value to pointer")
+		} else {
+			return value, nil
 		}
 	}
 }

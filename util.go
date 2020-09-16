@@ -8,12 +8,27 @@ import (
 )
 
 const TAG = "json"
+const TYPETAG = "graphql"
 
 var boundTypes = map[string]*Object{}
 var anonTypes = 0
 var timeType = reflect.TypeOf(time.Time{})
 
-func BindType(tipe reflect.Type) Type {
+func MergeFields(fieldses ...Fields) (ret Fields) {
+	ret = Fields{}
+	for _, fields := range fieldses {
+		for key, field := range fields {
+			if _, ok := ret[key]; ok {
+				panic(fmt.Sprintf("Dupliate field: %s", key))
+			}
+			ret[key] = field
+		}
+	}
+	return ret
+}
+
+func BindType(tipe reflect.Type, additionalFields ...Fields) Type {
+	combinedAdditionalFields := MergeFields(additionalFields...)
 	if tipe.Kind() == reflect.Ptr {
 		tipe = tipe.Elem()
 	}
@@ -40,7 +55,7 @@ func BindType(tipe reflect.Type) Type {
 		boundTypes[typeName] = object
 		*object = *NewObject(ObjectConfig{
 			Name:   typeName,
-			Fields: BindFields(reflect.New(tipe).Interface()),
+			Fields: MergeFields(BindFields(reflect.New(tipe).Interface()), combinedAdditionalFields),
 		})
 	}
 	return object
@@ -55,6 +70,25 @@ func safeName(tipe reflect.Type) string {
 		name = strings.Replace(fmt.Sprint(tipe), ".", "_", -1)
 	}
 	return name
+}
+
+func getType(typeTag string) Output {
+	switch strings.ToLower(typeTag) {
+	case "int":
+		return Int
+	case "float":
+		return Float
+	case "string":
+		return String
+	case "boolean":
+		return Boolean
+	case "id":
+		return ID
+	case "datetime":
+		return DateTime
+	default:
+		panic(fmt.Sprintf("Unsupported graphql type: %s", typeTag))
+	}
 }
 
 func BindFields(obj interface{}) Fields {
@@ -75,14 +109,17 @@ func BindFields(obj interface{}) Fields {
 			continue
 		}
 
+		typeTag := field.Tag.Get(TYPETAG)
+
 		fieldType := field.Type
 
 		if fieldType.Kind() == reflect.Ptr {
 			fieldType = fieldType.Elem()
 		}
-
 		var graphType Output
-		if fieldType == timeType {
+		if typeTag != "" {
+			graphType = getType(typeTag)
+		} else if fieldType == timeType {
 			graphType = DateTime
 		} else if fieldType.Kind() == reflect.Struct {
 			if tag == "" {

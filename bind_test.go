@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,10 @@ func Hello(ctx *context.Context) (output *HelloOutput, err error) {
 		Message: "Hello World",
 	}
 	return output, nil
+}
+
+func Upper(source *HelloOutput) string {
+	return strings.ToUpper(source.Message)
 }
 
 type GreetingInput struct {
@@ -102,7 +107,9 @@ func friends(ctx *context.Context) (output *FriendRecur) {
 func TestBindHappyPath(t *testing.T) {
 	// Schema
 	fields := graphql.Fields{
-		"hello":       graphql.Bind(Hello),
+		"hello": graphql.Bind(Hello, graphql.Fields{
+			"upper": graphql.Bind(Upper),
+		}),
 		"greeting":    graphql.Bind(Greeting),
 		"greetingPtr": graphql.Bind(GreetingPtr),
 		"friends":     graphql.Bind(friends),
@@ -130,6 +137,7 @@ func TestBindHappyPath(t *testing.T) {
 		{
 			hello {
 				message
+				upper
 			}
 			greeting(name:"Alan") {
 				message
