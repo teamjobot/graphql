@@ -117,11 +117,14 @@ func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
 			if inputIn != nil {
 				var inputType, inputBaseType, sourceType, sourceBaseType reflect.Type
 				sourceVal := reflect.ValueOf(p.Source)
-				sourceType = sourceVal.Type()
-				if sourceType.Kind() == reflect.Ptr {
-					sourceBaseType = sourceType.Elem()
-				} else {
-					sourceBaseType = sourceType
+				sourceExists := !sourceVal.IsZero()
+				if sourceExists {
+					sourceType = sourceVal.Type()
+					if sourceType.Kind() == reflect.Ptr {
+						sourceBaseType = sourceType.Elem()
+					} else {
+						sourceBaseType = sourceType
+					}
 				}
 				inputType = tipe.In(*inputIn)
 				isPtr := tipe.In(*inputIn).Kind() == reflect.Ptr
@@ -131,7 +134,7 @@ func Bind(bindTo interface{}, additionalFields ...Fields) *Field {
 					inputBaseType = inputType
 				}
 				var input interface{}
-				if sourceBaseType.AssignableTo(inputBaseType) {
+				if sourceExists && sourceBaseType.AssignableTo(inputBaseType) {
 					input = sourceVal.Interface()
 				} else {
 					input = reflect.New(inputBaseType).Interface()
@@ -224,7 +227,7 @@ func extendType(t Type, fields Fields) {
 }
 
 func convertValue(value reflect.Value, targetType reflect.Type) (ret reflect.Value, err error) {
-	if !value.IsValid() {
+	if !value.IsValid() || value.IsZero() {
 		return reflect.Zero(targetType), nil
 	}
 	if value.Type().Kind() == reflect.Ptr {
